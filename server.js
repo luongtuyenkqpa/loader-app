@@ -2,7 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const app = express();
-const port = 3000;
+// Chạy trên host online
+const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -10,6 +11,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const DB_FILE = './database.json';
 const ADMIN_PASSWORD = 'admin'; 
+// API KEY CỦA ÔNG ĐÃ ĐƯỢC CHÈN VÀO ĐÂY:
 const GEMINI_KEY = 'AIzaSyCEwd9Tr-j14tLxgt8WaiCQdgEnc-WiTHE'; 
 
 // ==============================================
@@ -29,8 +31,7 @@ function saveDB(data) {
 // MIDDLEWARE BẢO MẬT TRANG ADMIN
 // ==============================================
 app.use((req, res, next) => {
-    // Đã thêm /kich-hoat vào danh sách ngoại lệ để khách không bị chặn
-    if (req.path === '/api/check' || req.path === '/api/ai' || req.path === '/kich-hoat') return next();
+    if (req.path === '/api/check' || req.path === '/api/ai') return next();
     if (req.path === '/login') return next();
     const cookies = req.headers.cookie || '';
     if (cookies.includes('admin_auth=true')) {
@@ -40,7 +41,7 @@ app.use((req, res, next) => {
 });
 
 // ==============================================
-// CHỨC NĂNG ĐĂNG NHẬP ADMIN
+// CHỨC NĂNG ĐĂNG NHẬP (GIAO DIỆN SIÊU ĐẸP)
 // ==============================================
 app.get('/login', (req, res) => {
     res.send(`
@@ -83,121 +84,10 @@ app.post('/login', (req, res) => {
         res.send('<script>alert("Mật khẩu không chính xác!"); window.location="/login";</script>');
     }
 });
-
 app.get('/logout', (req, res) => {
     res.setHeader('Set-Cookie', 'admin_auth=; Max-Age=0; HttpOnly; Path=/');
     res.redirect('/login');
 });
-
-// ==============================================
-// GIAO DIỆN KHÁCH HÀNG (TRANG NHẬP KEY VIP)
-// ==============================================
-app.get('/kich-hoat', (req, res) => {
-    res.send(`
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Kích Hoạt VIP LVT</title>
-        <style>
-            body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; background: url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070&auto=format&fit=crop') center/cover no-repeat; height: 100vh; display: flex; align-items: center; justify-content: center; }
-            .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px); z-index: 1; }
-            .login-card { position: relative; z-index: 2; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(15px); padding: 40px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); width: 320px; text-align: center; }
-            .login-card h2 { color: #fff; margin-top: 0; margin-bottom: 25px; letter-spacing: 2px; font-weight: 900; text-shadow: 0 0 10px rgba(0,255,255,0.5); }
-            .login-card select, .login-card input { width: 100%; padding: 15px; margin-bottom: 20px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0,255,255,0.3); outline: none; border-radius: 30px; color: #0ff; font-size: 16px; box-sizing: border-box; text-align: center; transition: 0.3s; }
-            .login-card select option { background: #121212; color: #0ff; }
-            .login-card input:focus, .login-card select:focus { border-color: #0ff; box-shadow: 0 0 15px rgba(0,255,255,0.4); background: rgba(0,0,0,0.6); }
-            .login-card input::placeholder { color: #aaa; }
-            .login-card button { width: 100%; padding: 15px; background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%); color: #fff; font-weight: bold; border: none; border-radius: 30px; cursor: pointer; font-size: 16px; transition: 0.3s; box-shadow: 0 5px 15px rgba(0, 210, 255, 0.4); text-transform: uppercase; }
-            .login-card button:hover { transform: scale(1.05); filter: brightness(1.2); }
-            .login-card button:disabled { background: #555; cursor: not-allowed; box-shadow: none; transform: none; }
-            #statusMessage { margin-top: 20px; font-size: 15px; font-weight: bold; line-height: 1.5; }
-        </style>
-    </head>
-    <body>
-        <div class="overlay"></div>
-        <div class="login-card">
-            <h2>LVT VIP LOADER</h2>
-            
-            <select id="gameSelect">
-                <option value="" disabled selected>-- Chọn Game/Tool --</option>
-                <option value="freefire">MG Bypass (Free Fire)</option>
-                <option value="olm">Tool Hack Olm.vn</option>
-            </select>
-
-            <input type="text" id="keyInput" placeholder="Nhập Key của bạn..." autocomplete="off">
-            <button id="btnSubmit" onclick="checkKey()">KÍCH HOẠT</button>
-            <div id="statusMessage"></div>
-        </div>
-
-        <script>
-            let deviceId = localStorage.getItem('lvt_device_id');
-            if (!deviceId) {
-                deviceId = 'WEB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-                localStorage.setItem('lvt_device_id', deviceId);
-            }
-
-            async function checkKey() {
-                const game = document.getElementById('gameSelect').value;
-                const key = document.getElementById('keyInput').value.trim();
-                const btn = document.getElementById('btnSubmit');
-                const statusBox = document.getElementById('statusMessage');
-
-                if (!game || !key) {
-                    statusBox.style.color = '#ffcc00';
-                    statusBox.innerHTML = '⚠️ Vui lòng chọn Game và nhập Key!';
-                    return;
-                }
-
-                btn.disabled = true;
-                btn.innerText = 'ĐANG KIỂM TRA...';
-                statusBox.innerHTML = '';
-
-                try {
-                    const response = await fetch('/api/check', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: key, deviceId: deviceId })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.status === 'success') {
-                        let expText = data.exp === 'permanent' ? 'Vĩnh viễn' : new Date(data.exp).toLocaleString();
-                        statusBox.style.color = '#00ffcc';
-                        statusBox.innerHTML = '✅ ' + data.message + 
-                                              '<br><span style="color:#fff; font-size:13px;">Hạn: ' + expText + '</span>' +
-                                              '<br><span style="color:#fff; font-size:13px;">Thiết bị: ' + data.devices + '</span>' +
-                                              '<br><span style="color:#ffcc00; font-size:13px;">Đang mở tool...</span>';
-
-                        setTimeout(() => {
-                            if (game === 'freefire') {
-                                window.location.href = 'https://link-tai-apk-mg-bypass.com';
-                            } else if (game === 'olm') {
-                                window.location.href = 'https://link-script-olm.com';
-                            }
-                        }, 2000);
-
-                    } else {
-                        statusBox.style.color = '#ff4444';
-                        statusBox.innerHTML = '❌ Lỗi: ' + data.message;
-                        btn.disabled = false;
-                        btn.innerText = 'KÍCH HOẠT';
-                    }
-                } catch (error) {
-                    statusBox.style.color = '#ff4444';
-                    statusBox.innerHTML = '❌ Lỗi kết nối Server!';
-                    btn.disabled = false;
-                    btn.innerText = 'KÍCH HOẠT';
-                }
-            }
-        </script>
-    </body>
-    </html>
-    `);
-});
-
 
 // ==============================================
 // 1. API CHECK KEY (TÍNH THỜI GIAN KHI LOGIN)
@@ -215,7 +105,6 @@ app.post('/api/check', (req, res) => {
     let keyData = db[key];
     if (keyData.status === 'banned') return res.json({ status: 'error', message: 'Key này đã bị khóa (Banned)!' });
 
-    // CHỈ BẮT ĐẦU ĐẾM THỜI GIAN KHI LẦN ĐẦU TIÊN ĐĂNG NHẬP
     if (keyData.exp === 'pending') {
         keyData.exp = Date.now() + keyData.durationMs;
         saveDB(db);
@@ -233,13 +122,13 @@ app.post('/api/check', (req, res) => {
 });
 
 // ==============================================
-// 2. API TRỢ LÝ AI
+// 2. API TRỢ LÝ AI (Đã sửa lỗi không phản hồi)
 // ==============================================
 app.post('/api/ai', async (req, res) => {
     try {
         const { prompt } = req.body;
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_KEY}`,
+            `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -272,15 +161,15 @@ app.post('/admin/create', (req, res) => {
         if (type !== 'permanent') { 
             const multipliers = { 'sec': 1000, 'min': 60000, 'hour': 3600000, 'day': 86400000, 'month': 2592000000, 'year': 31536000000 }; 
             durationMs = parseInt(duration) * multipliers[type]; 
-            expTime = 'pending'; // Trạng thái chờ, chưa đếm giờ
+            expTime = 'pending'; 
         }
-        db[newKey] = { exp: expTime, durationMs: durationMs, maxDevices: parseInt(maxDevices), devices: [], status: 'active' }; 
+    
+        db[newKey] = { exp: expTime, durationMs: durationMs, maxDevices: parseInt(maxDevices), devices: [], status: 'active' };
     }
     
     saveDB(db); 
     res.redirect('/');
 });
-
 app.post('/admin/add-time/:key', (req, res) => {
     let key = req.params.key; let { duration, type } = req.body; let db = loadDB();
     if (db[key] && db[key].exp !== 'permanent') { 
@@ -292,22 +181,16 @@ app.post('/admin/add-time/:key', (req, res) => {
     } 
     res.redirect('/');
 });
-
-// TÍNH NĂNG MỚI: Reset Thiết bị đã lưu của Key
 app.get('/admin/reset-device/:key', (req, res) => { 
     let db = loadDB(); 
     if (db[req.params.key]) { db[req.params.key].devices = []; saveDB(db); } 
     res.redirect('/'); 
 });
-
-// TÍNH NĂNG MỚI: Đưa Key trở lại trạng thái chờ kích hoạt (Khởi động lại thời gian)
 app.get('/admin/reset-time/:key', (req, res) => { 
     let db = loadDB(); 
     if (db[req.params.key] && db[req.params.key].exp !== 'permanent') { db[req.params.key].exp = 'pending'; saveDB(db); } 
     res.redirect('/'); 
 });
-
-// TÍNH NĂNG MỚI: Xóa hàng loạt tùy chọn
 app.post('/admin/delete-bulk', (req, res) => {
     let { deleteType } = req.body; 
     let db = loadDB();
@@ -324,7 +207,6 @@ app.post('/admin/delete-bulk', (req, res) => {
     saveDB(db);
     res.redirect('/');
 });
-
 app.get('/admin/add-device/:key', (req, res) => { let db = loadDB(); if (db[req.params.key]) { db[req.params.key].maxDevices += 1; saveDB(db); } res.redirect('/'); });
 app.get('/admin/sub-device/:key', (req, res) => { let db = loadDB(); if (db[req.params.key] && db[req.params.key].maxDevices > 1) { db[req.params.key].maxDevices -= 1; saveDB(db); } res.redirect('/'); });
 app.get('/admin/ban/:key', (req, res) => { let db = loadDB(); if (db[req.params.key]) { db[req.params.key].status = 'banned'; saveDB(db); } res.redirect('/'); });
@@ -405,6 +287,7 @@ app.get('/', (req, res) => {
                             <option value="VIP">Tạo Key VIP (VIP-)</option>
                         </select>
                     </div>
+                   
                     <div class="flex-row">
                         <input type="number" name="duration" placeholder="Số thời gian (VD: 1, 30...)" required>
                         <select name="type">
@@ -413,6 +296,7 @@ app.get('/', (req, res) => {
                             <option value="permanent">Vĩnh viễn</option>
                         </select>
                     </div>
+    
                     <div class="flex-row">
                         <input type="number" name="maxDevices" placeholder="Số thiết bị tối đa" value="1" required>
                         <input type="number" name="quantity" placeholder="Số lượng tạo (VD: 2)" value="1" required style="border-color: #ff9800; font-weight:bold;">
@@ -443,41 +327,8 @@ app.get('/', (req, res) => {
                 </form>
             </div>
             <br>
-            <div style="overflow-x:auto;">
-                <table>
-                    <tr>
-                        <th>Key VIP / Thường</th>
-                        <th>Hạn Sử Dụng</th>
-                        <th>Thiết bị (HWID)</th>
-                        <th>Hành Động</th>
-                    </tr>
-                    ${keysHtml}
-                </table>
-            </div>
+            <table><tr><th>Key / Trạng thái</th><th>Hết hạn</th><th>Thiết bị</th><th>Hành động</th></tr>\${keysHtml}</table>
         </div>
 
         <script>
-            function copyKey(key) {
-                navigator.clipboard.writeText(key).then(() => {
-                    let msg = document.getElementById('copy-msg-' + key);
-                    if(msg) {
-                        msg.innerText = "(Đã copy!)";
-                        msg.style.color = "#28a745";
-                        setTimeout(() => { 
-                            msg.innerText = "(Nhấn để copy)"; 
-                            msg.style.color = "#6c757d"; 
-                        }, 2000);
-                    }
-                });
-            }
-        </script>
-    </body>
-    </html>
-    `;
-    res.send(html);
-});
-
-// Bắt đầu chạy Server
-app.listen(process.env.PORT || port, () => {
-    console.log(`Server đang chạy tại http://localhost:${process.env.PORT || port}`);
-});
+            function copyKey(k
